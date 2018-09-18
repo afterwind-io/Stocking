@@ -6,7 +6,7 @@ import (
 )
 
 // id is a channel for fetching an auto-increment, int64 based string key
-var id = make(chan (string))
+var id = make(chan string)
 
 func generateID() string {
 	i := int64(0)

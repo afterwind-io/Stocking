@@ -1,11 +1,23 @@
 package stocking
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 
 	"github.com/gorilla/websocket"
+)
+
+// Some default startup params
+const (
+	DefaultHost = ":12345"
+	DefaultRoot = "ws"
+)
+
+var (
+	upgrader    websocket.Upgrader
+	hub         = newHub()
+	router      = newRouter()
+	middlewares = []Middleware{}
 )
 
 // Stocking is the instance of the websocket server
@@ -23,38 +35,64 @@ type Stocking struct {
 func (s *Stocking) Start() {
 	upgrader = s.Upgrader
 
+	// TODO
+	upgrader.CheckOrigin = func(r *http.Request) bool {
+		return true
+	}
+
 	go generateID()
 
-	http.HandleFunc("/"+s.Root, handler)
+	hub.use(&mLogger{})
+	hub.use(&mEcho{})
+	hub.use(middlewares...)
+	hub.use(router)
+	go hub.run()
+
+	http.HandleFunc("/"+s.Root, serveClient)
 	log.Fatal(http.ListenAndServe(s.Host, nil))
 }
 
-var upgrader websocket.Upgrader
-var clients = make(map[*Client]bool)
-var rooms = make(map[string]*Client)
+// On adds a route handler
+func (s *Stocking) On(route string, handler RouterHandler) {
+	router.On(route, handler)
+}
 
-func handler(w http.ResponseWriter, r *http.Request) {
+// Otherwise adds a fallback handler when no route hits
+func (s *Stocking) Otherwise(handler RouterHandler) {
+	router.Otherwise(handler)
+}
+
+// Use adds a middleware
+func (s *Stocking) Use(ms ...Middleware) {
+	middlewares = append(middlewares, ms...)
+}
+
+// NewStocking creates and returns a new stocking, server I mean.
+func NewStocking(host, root string) *Stocking {
+	if host == "" {
+		host = DefaultHost
+	}
+
+	if root == "" {
+		root = DefaultRoot
+	}
+
+	return &Stocking{
+		Host: host,
+		Root: root,
+	}
+}
+
+func serveClient(w http.ResponseWriter, r *http.Request) {
 	c, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println("Websocket upgrade failed: ", err)
+		return
 	}
 
-	client := createClient(c)
-	clients[client] = true
+	client := newClient(c)
+	hub.registry <- client
 
-	go serveClient(client)
-}
-
-func serveClient(c *Client) {
-	defer c.Connection.Close()
-
-	for {
-		_, content, err := c.Connection.ReadMessage()
-		if err != nil {
-			log.Println(err)
-			break
-		}
-
-		log.Println(fmt.Sprintf("[%v] %s", c.ID, content))
-	}
+	go client.Read(hub.inbound)
+	go client.Write()
 }
