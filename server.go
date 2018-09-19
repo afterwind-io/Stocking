@@ -43,7 +43,6 @@ func (s *Stocking) Start() {
 	go generateID()
 
 	hub.use(&mLogger{})
-	hub.use(&mEcho{})
 	hub.use(middlewares...)
 	hub.use(router)
 	go hub.run()

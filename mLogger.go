@@ -8,13 +8,10 @@ import (
 type mLogger struct {
 }
 
-func (me *mLogger) Forward(p *HubPackge) error {
+func (me *mLogger) Handle(p *HubPackge, next MiddlewareStepFunc) {
 	log.Println(fmt.Sprintf("<-- [%v] %s", p.client.id, p.content))
-	return nil
-}
 
-func (me *mLogger) Backward(p *HubPackge) error {
+	<-next(nil)
+
 	log.Println(fmt.Sprintf("--> [%v] %s", p.client.id, p.content))
-	return nil
 }
-

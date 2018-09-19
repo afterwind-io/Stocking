@@ -2,6 +2,8 @@ package stocking
 
 // Middleware TODO
 type Middleware interface {
-	Forward(p *HubPackge) error
-	Backward(p *HubPackge) error
+	Handle(p *HubPackge, next MiddlewareStepFunc)
 }
+
+// MiddlewareStepFunc TODO
+type MiddlewareStepFunc = func(err error) chan bool

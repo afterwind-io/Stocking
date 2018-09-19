@@ -49,8 +49,11 @@ func flow(middlewares []Middleware, p *HubPackge) error {
 	}
 
 	middleware := middlewares[0]
+	forward, backward, next := step()
 
-	if err := middleware.Forward(p); err != nil {
+	go middleware.Handle(p, next)
+
+	if err := <-forward; err != nil {
 		log.Println("middleware error: ", err)
 		return err
 	}
@@ -59,10 +62,7 @@ func flow(middlewares []Middleware, p *HubPackge) error {
 		return err
 	}
 
-	if err := middleware.Backward(p); err != nil {
-		log.Println("middleware error: ", err)
-		return err
-	}
+	backward <- true
 
 	return nil
 }
@@ -74,4 +74,15 @@ func newHub() *Hub {
 		clients:     make(map[*Client]bool),
 		middlewares: []Middleware{},
 	}
+}
+
+func step() (chan error, chan bool, MiddlewareStepFunc) {
+	forward := make(chan error)
+	backward := make(chan bool)
+	next := func(err error) chan bool {
+		forward <- err
+		return backward
+	}
+
+	return forward, backward, next
 }
