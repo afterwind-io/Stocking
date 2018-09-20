@@ -16,6 +16,7 @@ type Hub struct {
 type HubPackge struct {
 	client  *Client
 	content []byte
+	mailbox []byte
 }
 
 func (hub *Hub) use(middlewares ...Middleware) {
@@ -36,8 +37,8 @@ func (hub *Hub) run() {
 				p.client.connection.Close()
 			}
 
-			if len(p.content) != 0 {
-				p.client.send <- p.content
+			if len(p.mailbox) != 0 {
+				p.client.send <- p.mailbox
 			}
 		}
 	}
@@ -49,7 +50,7 @@ func flow(middlewares []Middleware, p *HubPackge) error {
 	}
 
 	middleware := middlewares[0]
-	forward, backward, next := step()
+	forward, backward, next, done := step()
 
 	go middleware.Handle(p, next)
 
@@ -62,7 +63,11 @@ func flow(middlewares []Middleware, p *HubPackge) error {
 		return err
 	}
 
-	backward <- true
+	backward <- done
+
+	if err := <-done; err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -76,13 +81,22 @@ func newHub() *Hub {
 	}
 }
 
-func step() (chan error, chan bool, MiddlewareStepFunc) {
+func newHubPackage(c *Client, m []byte) HubPackge {
+	return HubPackge{
+		client:  c,
+		content: m,
+		mailbox: []byte{},
+	}
+}
+
+func step() (chan error, chan chan error, MiddlewareStepFunc, chan error) {
 	forward := make(chan error)
-	backward := make(chan bool)
-	next := func(err error) chan bool {
+	backward := make(chan chan error)
+	next := func(err error) chan chan error {
 		forward <- err
 		return backward
 	}
+	done := make(chan error)
 
-	return forward, backward, next
+	return forward, backward, next, done
 }

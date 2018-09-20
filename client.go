@@ -27,7 +27,7 @@ func (c *Client) Read(hub chan HubPackge) {
 			break
 		}
 
-		hub <- HubPackge{c, message}
+		hub <- newHubPackage(c, message)
 	}
 }
 

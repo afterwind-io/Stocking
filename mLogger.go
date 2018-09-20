@@ -11,7 +11,9 @@ type mLogger struct {
 func (me *mLogger) Handle(p *HubPackge, next MiddlewareStepFunc) {
 	log.Println(fmt.Sprintf("<-- [%v] %s", p.client.id, p.content))
 
-	<-next(nil)
+	done := <-next(nil)
 
-	log.Println(fmt.Sprintf("--> [%v] %s", p.client.id, p.content))
+	log.Println(fmt.Sprintf("--> [%v] %s", p.client.id, p.mailbox))
+
+	done <- nil
 }

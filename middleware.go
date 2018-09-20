@@ -6,4 +6,4 @@ type Middleware interface {
 }
 
 // MiddlewareStepFunc TODO
-type MiddlewareStepFunc = func(err error) chan bool
+type MiddlewareStepFunc = func(err error) chan chan error

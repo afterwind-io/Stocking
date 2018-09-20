@@ -2,10 +2,9 @@ package stocking
 
 // RouterPackage TODO
 type RouterPackage struct {
-	route string
-	body  string
+	Route string
+	Body  interface{}
 }
 
 // RouterHandler TODO
-type RouterHandler = func(p RouterPackage)
-
+type RouterHandler = func(p RouterPackage) (interface{}, error)
