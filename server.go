@@ -52,8 +52,8 @@ func (s *Stocking) Start() {
 }
 
 // On adds a route handler
-func (s *Stocking) On(route string, handler RouterHandler) {
-	router.On(route, handler)
+func (s *Stocking) On(route string, handler RouterHandler, typeHint interface{}) {
+	router.On(route, handler, typeHint)
 }
 
 // Otherwise adds a fallback handler when no route hits

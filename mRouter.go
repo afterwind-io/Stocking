@@ -2,15 +2,26 @@ package stocking
 
 import (
 	"encoding/json"
+	"sync"
 )
 
+type routeMeta struct {
+	handler  RouterHandler
+	typeHint interface{}
+	mux      sync.Mutex
+}
+
 type mRouter struct {
-	routes    map[string]RouterHandler
+	routes    map[string]routeMeta
 	otherwise RouterHandler
 }
 
-func (me *mRouter) On(route string, handler RouterHandler) {
-	me.routes[route] = handler
+func (me *mRouter) On(route string, handler RouterHandler, typeHint interface{}) {
+	me.routes[route] = routeMeta{
+		handler:  handler,
+		typeHint: typeHint,
+		mux:      sync.Mutex{},
+	}
 }
 
 func (me *mRouter) Otherwise(handler RouterHandler) {
@@ -19,6 +30,12 @@ func (me *mRouter) Otherwise(handler RouterHandler) {
 
 func (me *mRouter) Handle(p *HubPackge, next MiddlewareStepFunc) {
 	pkg, err := unmarshal(p.content)
+	if err != nil {
+		<-next(err)
+		return
+	}
+
+	err = me.unserialize(&pkg)
 	if err != nil {
 		<-next(err)
 		return
@@ -39,13 +56,35 @@ func (me *mRouter) Handle(p *HubPackge, next MiddlewareStepFunc) {
 	done <- nil
 }
 
+func (me *mRouter) unserialize(p *RouterPackage) error {
+	var typeHint interface{}
+	meta, ok := me.routes[p.Route]
+	if ok {
+		typeHint = meta.typeHint
+	} else {
+		typeHint = &struct{}{}
+	}
+
+	// HACK meta.typeHint的实际类型是指向具体参数类型的指针，
+	// 需要加锁以防止json.Unmarshal产生竞态
+	meta.mux.Lock()
+	err := json.Unmarshal(p.Body.(json.RawMessage), typeHint)
+	meta.mux.Unlock()
+	if err != nil {
+		return err
+	}
+
+	p.Body = meta.typeHint
+	return nil
+}
+
 func (me *mRouter) distribute(p RouterPackage) (interface{}, error) {
 	var res interface{}
 	var e error
 
-	handler, ok := me.routes[p.Route]
+	meta, ok := me.routes[p.Route]
 	if ok {
-		res, e = handler(p)
+		res, e = meta.handler(p)
 	} else {
 		res, e = me.otherwise(p)
 	}
@@ -55,7 +94,7 @@ func (me *mRouter) distribute(p RouterPackage) (interface{}, error) {
 
 func newRouter() *mRouter {
 	return &mRouter{
-		routes:    make(map[string]RouterHandler),
+		routes:    make(map[string]routeMeta),
 		otherwise: blackhole,
 	}
 }

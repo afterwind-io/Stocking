@@ -1,11 +1,15 @@
 package stocking
 
+import (
+	"encoding/json"
+)
+
 // TextMessageInboundProtocol TODO
 type TextMessageInboundProtocol struct {
 	// Route name
 	Route string `json:"route"`
 	// message Body
-	Body interface{} `json:"body"`
+	Body json.RawMessage `json:"body"`
 }
 
 // TextMessageOutboundProtocol TODO
