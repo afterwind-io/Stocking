@@ -33,22 +33,16 @@ type Stocking struct {
 
 // Start the server
 func (s *Stocking) Start() {
-	upgrader = s.Upgrader
+	s.Attach()
 
-	// TODO
-	upgrader.CheckOrigin = func(r *http.Request) bool {
-		return true
-	}
+	log.Fatal(http.ListenAndServe(s.Host, nil))
+}
 
-	go generateID()
-
-	hub.use(&mLogger{})
-	hub.use(middlewares...)
-	hub.use(router)
-	go hub.run()
+// Attach root handler to an existing http server
+func (s *Stocking) Attach() {
+	s.boot()
 
 	http.HandleFunc("/"+s.Root, serveClient)
-	log.Fatal(http.ListenAndServe(s.Host, nil))
 }
 
 // On adds a route handler
@@ -64,6 +58,22 @@ func (s *Stocking) Otherwise(handler RouterHandler) {
 // Use adds a middleware
 func (s *Stocking) Use(ms ...Middleware) {
 	middlewares = append(middlewares, ms...)
+}
+
+func (s *Stocking) boot() {
+	upgrader = s.Upgrader
+
+	// TODO
+	upgrader.CheckOrigin = func(r *http.Request) bool {
+		return true
+	}
+
+	go generateID()
+
+	hub.use(&mLogger{})
+	hub.use(middlewares...)
+	hub.use(router)
+	go hub.run()
 }
 
 // NewStocking creates and returns a new stocking, server I mean.
