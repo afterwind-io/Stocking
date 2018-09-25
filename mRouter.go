@@ -2,6 +2,7 @@ package stocking
 
 import (
 	"encoding/json"
+	"reflect"
 	"sync"
 )
 
@@ -57,24 +58,23 @@ func (me *mRouter) Handle(p *HubPackge, next MiddlewareStepFunc) {
 }
 
 func (me *mRouter) unserialize(p *RouterPackage) error {
-	var typeHint interface{}
+	var body interface{}
+
 	meta, ok := me.routes[p.Route]
-	if ok {
-		typeHint = meta.typeHint
+	if ok && meta.typeHint != nil {
+		body = clone(meta.typeHint)
 	} else {
-		typeHint = &struct{}{}
+		b := make(map[string]interface{})
+		body = &b
 	}
 
-	// HACK meta.typeHint的实际类型是指向具体参数类型的指针，
-	// 需要加锁以防止json.Unmarshal产生竞态
-	meta.mux.Lock()
-	err := json.Unmarshal(p.Body.(json.RawMessage), typeHint)
-	meta.mux.Unlock()
+	err := json.Unmarshal(p.Body.(json.RawMessage), body)
 	if err != nil {
 		return err
 	}
 
-	p.Body = meta.typeHint
+	p.Body = body
+
 	return nil
 }
 
@@ -136,4 +136,9 @@ func marshal(body interface{}, e error) ([]byte, error) {
 
 func blackhole(p RouterPackage) (interface{}, error) {
 	return struct{}{}, nil
+}
+
+// clone 接收一个预期类型为T的参数，返回一个新的*T值
+func clone(source interface{}) interface{} {
+	return reflect.New(reflect.ValueOf(source).Type()).Interface()
 }
