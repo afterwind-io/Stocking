@@ -7,40 +7,49 @@ import (
 // Hub TODO
 type Hub struct {
 	registry    chan *Client
-	inbound     chan HubPackge
+	inbound     chan *HubPackge
 	clients     map[*Client]bool
 	middlewares []Middleware
 }
 
-// HubPackge TODO
-type HubPackge struct {
-	client  *Client
-	content []byte
-	mailbox []byte
+func (h *Hub) use(middlewares ...Middleware) {
+	h.middlewares = append(h.middlewares, middlewares...)
 }
 
-func (hub *Hub) use(middlewares ...Middleware) {
-	hub.middlewares = append(hub.middlewares, middlewares...)
-}
-
-func (hub *Hub) run() {
+func (h *Hub) run() {
 	for {
 		select {
-		case client := <-hub.registry:
-			hub.clients[client] = true
+		case client := <-h.registry:
+			h.clients[client] = true
 			log.Printf("Connected: %v", client.id)
 
-		case p := <-hub.inbound:
-			if err := flow(hub.middlewares, &p); err != nil {
-				// TODO
-				delete(hub.clients, p.client)
-				p.client.connection.Close()
+		case p := <-h.inbound:
+			h.switchType(p)
+		}
+	}
+}
+
+func (h *Hub) switchType(p *HubPackge) {
+	switch p.mtype {
+	case tmitPing:
+		p.client.send <- []byte(tmitPong)
+
+	case tmitMessage:
+		if err := flow(h.middlewares, p); err != nil {
+			// TODO
+			delete(h.clients, p.client)
+			p.client.connection.Close()
+		} else if len(p.content) != 0 {
+			if p.hasAck() {
+				p.mtype = tmitAck
 			}
 
-			if len(p.mailbox) != 0 {
-				p.client.send <- p.mailbox
-			}
+			p.client.send <- p.encode()
 		}
+
+	case tmitClose:
+		// TODO
+		p.client.connection.Close()
 	}
 }
 
@@ -75,17 +84,9 @@ func flow(middlewares []Middleware, p *HubPackge) error {
 func newHub() *Hub {
 	return &Hub{
 		registry:    make(chan *Client),
-		inbound:     make(chan HubPackge, 100),
+		inbound:     make(chan *HubPackge, 100),
 		clients:     make(map[*Client]bool),
 		middlewares: []Middleware{},
-	}
-}
-
-func newHubPackage(c *Client, m []byte) HubPackge {
-	return HubPackge{
-		client:  c,
-		content: m,
-		mailbox: []byte{},
 	}
 }
 

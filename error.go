@@ -1,10 +1,9 @@
 package stocking
 
-// JSONSyntaxError TODO
-type JSONSyntaxError struct {
+type sError struct {
 	msg string
 }
 
-func (err JSONSyntaxError) Error() string {
+func (err sError) Error() string {
 	return err.msg
 }

@@ -13,7 +13,7 @@ type Client struct {
 	send       chan []byte
 }
 
-func (c *Client) Read(hub chan HubPackge) {
+func (c *Client) Read(hub chan *HubPackge) {
 	defer func() {
 		c.connection.Close()
 	}()
@@ -27,7 +27,12 @@ func (c *Client) Read(hub chan HubPackge) {
 			break
 		}
 
-		hub <- newHubPackage(c, message)
+		p, err := newHubPackage(c, message)
+		if err != nil {
+			break
+		}
+
+		hub <- p
 	}
 }
 

@@ -30,7 +30,7 @@ func (me *mRouter) Otherwise(handler RouterHandler) {
 }
 
 func (me *mRouter) Handle(p *HubPackge, next MiddlewareStepFunc) {
-	pkg, err := unmarshal(p.content)
+	pkg, err := unmarshal([]byte(p.content))
 	if err != nil {
 		<-next(err)
 		return
@@ -46,13 +46,17 @@ func (me *mRouter) Handle(p *HubPackge, next MiddlewareStepFunc) {
 
 	done := <-next(nil)
 
-	mail, err := marshal(res, e)
-	if err != nil {
-		done <- err
-		return
-	}
+	if res == nil && e == nil {
+		p.content = ""
+	} else {
+		mail, err := marshal(res, e)
+		if err != nil {
+			done <- err
+			return
+		}
 
-	p.mailbox = mail
+		p.content = string(mail)
+	}
 
 	done <- nil
 }
@@ -101,7 +105,7 @@ func newRouter() *mRouter {
 
 func unmarshal(raw []byte) (RouterPackage, error) {
 	if !json.Valid(raw) {
-		return RouterPackage{}, JSONSyntaxError{"Invalid Json Systax."}
+		return RouterPackage{}, sError{"Invalid Json Systax."}
 	}
 
 	var msg TextMessageInboundProtocol
@@ -111,19 +115,19 @@ func unmarshal(raw []byte) (RouterPackage, error) {
 
 	return RouterPackage{
 		Route: msg.Route,
-		Body:  msg.Body,
+		Body:  msg.Payload,
 	}, nil
 }
 
-func marshal(body interface{}, e error) ([]byte, error) {
-	errorMsg := ""
-	if e != nil {
-		errorMsg = e.Error()
-	}
+func marshal(payload interface{}, e error) ([]byte, error) {
+	msg := TextMessageOutboundProtocol{}
 
-	msg := TextMessageOutboundProtocol{
-		Error: errorMsg,
-		Body:  body,
+	if e != nil {
+		msg.Code = 1
+		msg.Payload = e.Error()
+	} else {
+		msg.Code = 0
+		msg.Payload = payload
 	}
 
 	res, err := json.Marshal(msg)
