@@ -2,15 +2,14 @@ package stocking
 
 import (
 	"bytes"
-	"fmt"
 )
 
 // HubPackge TODO
 type HubPackge struct {
 	client  *Client
 	raw     []byte
-	mtype   TextMessageInboundType
-	ack     string
+	mtype   string
+	ccode   string
 	content string
 }
 
@@ -27,18 +26,24 @@ func (p *HubPackge) decode() error {
 	}
 
 	p.mtype = string(mtype)
-	p.ack = string(segs[tmisAck])
+	p.ccode = string(segs[tmisCCode])
 	p.content = string(segs[tmisContent])
 
 	return nil
 }
 
 func (p *HubPackge) encode() []byte {
-	return []byte(fmt.Sprintf(`%v,%v,%v`, p.mtype, p.ack, p.content))
+	return []byte(p.mtype + "," + p.ccode + "," + p.content)
 }
 
 func (p *HubPackge) hasAck() bool {
-	return p.ack != ""
+	return p.ccode != "0"
+}
+
+func (p *HubPackge) error(ccode, content string) {
+	p.mtype = tmitError
+	p.ccode = ccode
+	p.content = content
 }
 
 func newHubPackage(c *Client, m []byte) (*HubPackge, error) {

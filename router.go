@@ -9,9 +9,16 @@ type RouterPackage struct {
 // RouterHandler TODO
 type RouterHandler = func(p RouterPackage) (interface{}, error)
 
+// RouterMessageProtocol TODO
+type RouterMessageProtocol struct {
+	Code    int         `json:"c"`
+	Payload interface{} `json:"p"`
+}
+
 // RouterError TODO
 type RouterError struct {
-	msg string
+	code int
+	msg  string
 }
 
 func (e RouterError) Error() string {

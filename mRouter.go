@@ -108,25 +108,31 @@ func unmarshal(raw []byte) (RouterPackage, error) {
 		return RouterPackage{}, sError{"Invalid Json Systax."}
 	}
 
-	var msg TextMessageInboundProtocol
+	var msg TextMessageProtocol
 	if err := json.Unmarshal(raw, &msg); err != nil {
 		return RouterPackage{}, err
 	}
 
 	return RouterPackage{
-		Route: msg.Route,
+		Route: msg.Event,
 		Body:  msg.Payload,
 	}, nil
 }
 
 func marshal(payload interface{}, e error) ([]byte, error) {
-	msg := TextMessageOutboundProtocol{}
+	msg := RouterMessageProtocol{}
 
 	if e != nil {
-		msg.Code = 1
+		re, ok := e.(RouterError)
+
+		if ok {
+			msg.Code = re.code
+		} else {
+			msg.Code = 0
+		}
 		msg.Payload = e.Error()
 	} else {
-		msg.Code = 0
+		msg.Code = -1
 		msg.Payload = payload
 	}
 

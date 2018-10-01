@@ -10,6 +10,7 @@ import (
 type Client struct {
 	connection *websocket.Conn
 	id         string
+	channel    map[string]bool
 	send       chan []byte
 }
 
@@ -21,7 +22,10 @@ func (c *Client) Read(hub chan *HubPackge) {
 	for {
 		_, message, err := c.connection.ReadMessage()
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+			if websocket.IsUnexpectedCloseError(err,
+				websocket.CloseGoingAway,
+				websocket.CloseAbnormalClosure,
+			) {
 				log.Printf("error: %v", err)
 			}
 			break
@@ -44,12 +48,12 @@ func (c *Client) Write() {
 	for {
 		content := <-c.send
 
-		w, err := c.connection.NextWriter(websocket.TextMessage)
-		if err != nil {
+		if err := c.connection.WriteMessage(
+			websocket.TextMessage,
+			content,
+		); err != nil {
 			return
 		}
-
-		w.Write(content)
 	}
 }
 
@@ -59,7 +63,8 @@ func newClient(c *websocket.Conn) *Client {
 	client := Client{
 		connection: c,
 		id:         i,
-		send:       make(chan []byte),
+		channel:    make(map[string]bool),
+		send:       make(chan []byte, 1),
 	}
 
 	return &client
