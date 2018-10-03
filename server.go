@@ -9,8 +9,8 @@ import (
 
 // Some default startup params
 const (
-	DefaultHost = ":12345"
-	DefaultRoot = "ws"
+	defaultHost = ":12345"
+	defaultRoot = "ws"
 )
 
 var (
@@ -79,11 +79,11 @@ func (s *Stocking) boot() {
 // NewStocking creates and returns a new stocking, server I mean.
 func NewStocking(host, root string) *Stocking {
 	if host == "" {
-		host = DefaultHost
+		host = defaultHost
 	}
 
 	if root == "" {
-		root = DefaultRoot
+		root = defaultRoot
 	}
 
 	return &Stocking{
@@ -99,9 +99,9 @@ func serveClient(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := newClient(c)
-	hub.registry <- client
+	client := newClient(c, hub)
+	hub.signin <- client
 
-	go client.Read(hub.inbound)
-	go client.Write()
+	go client.read()
+	go client.write()
 }

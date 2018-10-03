@@ -2,12 +2,13 @@ package stocking
 
 // RouterPackage TODO
 type RouterPackage struct {
-	Route string
-	Body  interface{}
+	Client *Client
+	Route  string
+	Body   interface{}
 }
 
 // RouterHandler TODO
-type RouterHandler = func(p RouterPackage) (interface{}, error)
+type RouterHandler = func(p *RouterPackage) (interface{}, error)
 
 // RouterMessageProtocol TODO
 type RouterMessageProtocol struct {
@@ -23,4 +24,9 @@ type RouterError struct {
 
 func (e RouterError) Error() string {
 	return e.msg
+}
+
+// NewTextRouterError TODO
+func NewTextRouterError(msg string) RouterError {
+	return RouterError{0, msg}
 }

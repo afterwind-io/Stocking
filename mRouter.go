@@ -42,7 +42,8 @@ func (me *mRouter) Handle(p *HubPackge, next MiddlewareStepFunc) {
 		return
 	}
 
-	res, e := me.distribute(pkg)
+	pkg.Client = p.client
+	res, e := me.distribute(&pkg)
 
 	done := <-next(nil)
 
@@ -82,7 +83,7 @@ func (me *mRouter) unserialize(p *RouterPackage) error {
 	return nil
 }
 
-func (me *mRouter) distribute(p RouterPackage) (interface{}, error) {
+func (me *mRouter) distribute(p *RouterPackage) (interface{}, error) {
 	var res interface{}
 	var e error
 
@@ -144,7 +145,7 @@ func marshal(payload interface{}, e error) ([]byte, error) {
 	return res, nil
 }
 
-func blackhole(p RouterPackage) (interface{}, error) {
+func blackhole(p *RouterPackage) (interface{}, error) {
 	return struct{}{}, nil
 }
 

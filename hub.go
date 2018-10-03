@@ -6,10 +6,11 @@ import (
 
 // Hub TODO
 type Hub struct {
-	registry    chan *Client
+	signin      chan *Client
+	signout     chan *Client
 	inbound     chan *HubPackge
 	clients     map[string]*Client
-	channels    map[string][]string
+	channels    map[string]map[string]bool
 	middlewares []Middleware
 }
 
@@ -20,8 +21,11 @@ func (h *Hub) use(middlewares ...Middleware) {
 func (h *Hub) run() {
 	for {
 		select {
-		case client := <-h.registry:
-			h.onRegister(client)
+		case client := <-h.signin:
+			h.onSignin(client)
+
+		case client := <-h.signout:
+			h.onSignout(client)
 
 		case p := <-h.inbound:
 			h.switchType(p)
@@ -57,30 +61,46 @@ func (h *Hub) switchType(p *HubPackge) {
 		hub.onBroadcast(p)
 
 	case tmitJoin:
-		hub.onJoin(p)
+		hub.onJoin(p.ccode, p.content, p.client)
 	}
 }
 
-func (h *Hub) onRegister(c *Client) {
+func (h *Hub) onSignin(c *Client) {
 	h.clients[c.id] = c
 
-	p := &HubPackge{
-		client:  c,
-		ccode:   "1",
-		content: c.id,
-	}
-	hub.onJoin(p)
+	// Join a channel named by client id,
+	// so we can emit messages to the specified client
+	// by broadcasting to this channel
+	hub.onJoin("1", c.id, c)
 
 	log.Printf("Connected: %v", c.id)
 	c.send <- []byte(tmitConnect)
+}
+
+func (h *Hub) onSignout(c *Client) {
+	client, ok := h.clients[c.id]
+	if !ok {
+		return
+	}
+
+	for channel := range client.channels {
+		h.onJoin("0", channel, c)
+	}
+	h.onJoin("0", c.id, c)
+
+	delete(h.clients, c.id)
+
+	c.conn.Close()
+
+	// Stop the Read/Write goroute
+	c.oops <- true
 }
 
 func (h *Hub) onConnect(p *HubPackge) {
 }
 
 func (h *Hub) onClose(p *HubPackge) {
-	// TODO
-	p.client.connection.Close()
+	h.onSignout(p.client)
 }
 
 func (h *Hub) onPingPong(p *HubPackge) {
@@ -89,9 +109,7 @@ func (h *Hub) onPingPong(p *HubPackge) {
 
 func (h *Hub) onMessage(p *HubPackge) {
 	if err := flow(h.middlewares, p); err != nil {
-		// TODO
-		delete(h.clients, p.client.id)
-		p.client.connection.Close()
+		h.onSignout(p.client)
 	} else if p.hasAck() {
 		p.client.send <- p.encode()
 	}
@@ -105,7 +123,7 @@ func (h *Hub) onBroadcast(p *HubPackge) {
 		return
 	}
 
-	for _, id := range group {
+	for id := range group {
 		client, ok := h.clients[id]
 
 		if !ok || (p.client != nil && id == p.client.id) {
@@ -116,32 +134,29 @@ func (h *Hub) onBroadcast(p *HubPackge) {
 	}
 }
 
-func (h *Hub) onJoin(p *HubPackge) {
-	if p.ccode == "1" {
-		group, ok := h.channels[p.content]
-		if ok {
-			h.channels[p.content] = append(group, p.client.id)
-		} else {
-			h.channels[p.content] = []string{p.client.id}
+func (h *Hub) onJoin(ccode string, channel string, c *Client) {
+	if ccode == "1" {
+		if _, ok := h.channels[channel]; !ok {
+			h.channels[channel] = make(map[string]bool)
 		}
 
-		p.client.channel[p.content] = true
-	} else if p.ccode == "0" {
-		if _, ok := p.client.channel[p.content]; !ok {
-			p.error("0", "Nope")
-		} else {
-			delete(p.client.channel, p.content)
-			delete(h.channels, p.content)
+		h.channels[channel][c.id] = true
+		c.channels[channel] = true
+	} else if ccode == "0" {
+		if _, ok := c.channels[channel]; ok {
+			delete(c.channels, channel)
+			delete(h.channels[channel], c.id)
 		}
 	}
 }
 
 func newHub() *Hub {
 	return &Hub{
-		registry:    make(chan *Client),
+		signin:      make(chan *Client),
+		signout:     make(chan *Client),
 		inbound:     make(chan *HubPackge, 100),
 		clients:     make(map[string]*Client),
-		channels:    make(map[string][]string),
+		channels:    make(map[string]map[string]bool),
 		middlewares: []Middleware{},
 	}
 }
